@@ -1,24 +1,39 @@
 {
   "manifest_version": 3,
-  "name": "CPI Guider",
-  "version": "1.1.0",
-  "description": "Helper panel for SAP Cloud Integration / Integration Suite on any tenant: messages, errors, trace, canvas step marks, log level, iFlow download.",
-  "permissions": ["activeTab", "scripting"],
-  "background": { "service_worker": "background.js" },
-  "action": {
-    "default_title": "CPI Guider - open on this page",
-    "default_icon": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png" }
+  "name": "SAP CPI Guider",
+  "version": "1.2.0",
+  "description": "Monitor, trace and debug SAP Cloud Integration iFlows on any tenant: messages, errors, payloads, red/green step overlay, themes.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
   },
-  "icons": { "16": "icon16.png", "32": "icon32.png", "48": "icon48.png", "128": "icon128.png" },
+  "action": {
+    "default_title": "SAP CPI Guider - open on this page",
+    "default_icon": {
+      "16": "icon16.png",
+      "32": "icon32.png",
+      "48": "icon48.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "32": "icon32.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
   "content_scripts": [
     {
       "matches": [
-        "https://*.hana.ondemand.com/shell/*",
-        "https://*.hana.ondemand.com/itspaces/*",
-        "https://*.cloud.sap/shell/*",
-        "https://*.cloud.sap/itspaces/*"
+        "https://*/itspaces/*",
+        "https://*/shell/*"
       ],
-      "js": ["content.js"],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ]
