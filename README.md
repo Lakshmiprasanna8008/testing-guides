@@ -1,4 +1,4 @@
-# CPI Guider (personal-use Chrome/Edge extension)
+# SAP CPI Guider (personal-use Chrome/Edge extension)
 
 ## Works on any tenant
 No URL editing needed. It activates automatically on any host whose path starts with /itspaces/ or /shell/ (SAP domains, regional hosts,
@@ -10,14 +10,19 @@ If your tenant has an unusual URL, open it and click the CPI Guider toolbar icon
 2. Chrome: open chrome://extensions   |   Edge: open edge://extensions
 3. Turn on **Developer mode**.
 4. Click **Load unpacked** and select the `cpi-guider` folder.
-5. Open your Cloud Integration tenant (URL containing /shell/ or /itspaces/). A blue **CPI Guider** button appears bottom-right.
+5. Open your Cloud Integration tenant (URL containing /shell/ or /itspaces/). A **SAP CPI Guider** button appears bottom-right.
 
 ## Features
+- Themes: Theme tab with Auto, Light, Dark, Yellow, Ocean, Forest, Rose, or any colour you pick (text colours adjust to stay readable).
+  Your choice is remembered.
 - Motion design: spring-eased panel open/close, sliding tab indicator, staggered table rows, shimmer loading skeletons,
   a 10-minute trace countdown bar, and canvas marks that reveal step by step in execution order (use Replay to rewatch).
   Respects the system "reduce motion" setting.
-- Canvas marks (inline trace): open a message, click "Mark on canvas"; steps it passed turn green, failed ones red.
-  Click a badge, or double-click the step itself, to see its payload and exchange properties. Needs trace data for payloads, and the iFlow open in Design view.
+- Red/green overlay: open a message and click **Trace steps**. The step list appears and every step the message passed through is
+  outlined on the diagram: green = ok, red = failed (with a count if it ran several times). Click a badge, or double-click the step,
+  to see its payload and exchange properties. If the page has no diagram (e.g. the monitor list), the overlay waits and appears by
+  itself when you open that iFlow in Design view. It also appears automatically on SAP's own trace page.
+  Payloads need the iFlow to have run with log level TRACE.
 - Log level: set TRACE/DEBUG/INFO for the iFlow from the panel (internal SAP command, trace resets after ~10 min).
 - Messages: filter by iFlow, status, time range; detail with GUID, correlation ID, error text,
   custom headers, attachments (view/save), trace steps with payload and exchange properties.
