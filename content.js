@@ -2,7 +2,8 @@
   'use strict';
   if (window.top !== window.self || document.getElementById('cpi-guider-host')) return;
 
-  const API = location.origin + '/itspaces/odata/api/v1';
+  const BASES = ['/api/v1', '/itspaces/odata/api/v1', '/odata/api/v1'];
+  let apiBase = null;
 
   // ---------- helpers ----------
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -10,8 +11,25 @@
   const pill = v => `<span class="pill ${esc(v)}">${esc(v)}</span>`;
   const fmtDate = v => { const m = /\/Date\((\d+)/.exec(v || ''); return m ? new Date(+m[1]).toLocaleString() : (v || ''); };
 
+  async function detectBase() {
+    if (apiBase) return apiBase;
+    for (const b of BASES) {
+      try {
+        const r = await fetch(location.origin + b + '/MessageProcessingLogs?$top=1&$format=json',
+          { credentials: 'include', headers: { Accept: 'application/json' } });
+        if (!r.ok) continue;
+        JSON.parse(await r.text());          // a login page returns 200 HTML, so insist on real JSON
+        apiBase = b;
+        return b;
+      } catch (e) { /* try next */ }
+    }
+    throw new Error('Could not find the OData API on this host (tried ' + BASES.join(', ') +
+      ').\nMake sure you are logged in and your user has monitoring/read roles.');
+  }
+
   async function api(path, as = 'json') {
-    const res = await fetch(API + path, {
+    const base = await detectBase();
+    const res = await fetch(location.origin + base + path, {
       credentials: 'include',
       headers: { Accept: as === 'json' ? 'application/json' : '*/*' }
     });
@@ -194,7 +212,7 @@
             </div>
           </div>
           <div class="card">
-            <b>API Explorer</b> <span class="muted">(GET, relative to /itspaces/odata/api/v1)</span>
+            <b>API Explorer</b> <span class="muted">(GET, relative to the detected API base, e.g. /api/v1)</span>
             <div class="row" style="margin-top:6px">
               <input id="apipath" size="52" value="/MessageProcessingLogs?$top=5&$format=json">
               <button class="b p" id="apirun">Run</button>
