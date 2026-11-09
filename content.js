@@ -21,6 +21,23 @@
   if (!(await looksLikeCpi())) return;
   if (document.getElementById('cpi-guider-host')) return;                           // another run won the race
 
+  const APP_NAME = 'SAP CPI Guider';
+
+  // settings live in chrome.storage.local (falls back to localStorage)
+  const store = {
+    async get(k) {
+      try { if (chrome && chrome.storage && chrome.storage.local) { const r = await chrome.storage.local.get(k); return r[k]; } } catch (e) { /* fall through */ }
+      try { return JSON.parse(localStorage.getItem('cpiGuider.' + k)); } catch (e) { return undefined; }
+    },
+    async set(k, v) {
+      try { if (chrome && chrome.storage && chrome.storage.local) { await chrome.storage.local.set({ [k]: v }); return; } } catch (e) { /* fall through */ }
+      try { localStorage.setItem('cpiGuider.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ }
+    }
+  };
+  const DEFAULT_CFG = { preset: 'auto', accent: '#1f3a5f', customDark: false, autoMark: true };
+  const cfg = Object.assign({}, DEFAULT_CFG, (await store.get('cfg')) || {});
+  let pending = (await store.get('pending')) || null;       // overlay waiting for the iFlow's design page
+
   const BASES = ['/api/v1', '/itspaces/odata/api/v1', '/odata/api/v1'];
   let apiBase = null;
 
@@ -102,29 +119,25 @@
   const CSS = `
     :host { all: initial;
       --bg:#fbfaf7; --surface:#ffffff; --ink:#1b2430; --muted:#6b7280; --line:#e7e3da; --tint:#f4f1ea;
-      --navy:#14213a; --navy2:#1f3a5f; --gold:#b08d57; --btn:#1f3a5f; --btn-ink:#ffffff;
+      --navy:#14213a; --navy2:#1f3a5f; --gold:#b08d57; --accent-text:#8a6a35; --btn:#1f3a5f; --btn-ink:#ffffff; --hdr-ink:#f3ead7;
+      --code-bg:#0f141c; --code-ink:#d9d4c7; --ring:rgba(176,141,87,.25);
       --shadow:0 18px 50px rgba(20,33,58,.28), 0 2px 8px rgba(20,33,58,.12);
     }
-    @media (prefers-color-scheme: dark) { :host {
-      --bg:#12171f; --surface:#1a212b; --ink:#ebe8e2; --muted:#98a1ae; --line:#2a3340; --tint:#202937;
-      --navy:#0d1522; --navy2:#16233a; --gold:#d3b27a; --btn:#d3b27a; --btn-ink:#12171f;
-      --shadow:0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35);
-    } }
     * { box-sizing: border-box; font-family: "Segoe UI", -apple-system, "SF Pro Text", Roboto, sans-serif; }
     [hidden] { display: none !important; }
 
     #fab { position: fixed; right: 22px; bottom: 22px; z-index: 2147483000; display: flex; align-items: center; gap: 8px;
-           background: linear-gradient(135deg, var(--navy), var(--navy2)); color: #f3ead7; border: 1px solid var(--gold);
+           background: linear-gradient(135deg, var(--navy), var(--navy2)); color: var(--hdr-ink); border: 1px solid var(--gold);
            border-radius: 999px; padding: 10px 18px 10px 14px; font-size: 12.5px; font-weight: 600; letter-spacing: .08em;
            cursor: pointer; box-shadow: var(--shadow); transition: transform .25s cubic-bezier(.2,.9,.3,1.3), filter .25s; user-select: none;
            animation: breathe 3.6s ease-in-out infinite; }
     #fab:hover { transform: translateY(-3px) scale(1.04); filter: brightness(1.12); }
     #fab:active { transform: scale(.96); }
-    #fab svg { color: var(--gold); transition: transform .6s cubic-bezier(.2,.9,.3,1.2); }
+    #fab svg { color: var(--hdr-ink); transition: transform .6s cubic-bezier(.2,.9,.3,1.2); }
     #fab:hover svg { transform: rotate(80deg); }
-    @keyframes breathe { 0%,100% { box-shadow: var(--shadow), 0 0 0 0 rgba(176,141,87,.0); } 50% { box-shadow: var(--shadow), 0 0 0 7px rgba(176,141,87,.18); } }
+    @keyframes breathe { 0%,100% { box-shadow: var(--shadow), 0 0 0 0 transparent; } 50% { box-shadow: var(--shadow), 0 0 0 7px var(--ring); } }
 
-    #panel { position: fixed; right: 22px; bottom: 80px; width: 540px; max-width: 96vw; height: 76vh; z-index: 2147483000;
+    #panel { position: fixed; right: 22px; bottom: 80px; width: 560px; max-width: 96vw; height: 76vh; z-index: 2147483000;
              background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
              display: flex; flex-direction: column; box-shadow: var(--shadow); font-size: 12.5px;
              transform-origin: 92% 100%; animation: rise .42s cubic-bezier(.2,.9,.25,1.04) both; }
@@ -133,16 +146,16 @@
     @keyframes fall { to { opacity: 0; transform: translateY(12px) scale(.96); } }
 
     #bar { display: flex; align-items: center; gap: 12px; padding: 14px 16px;
-           background: linear-gradient(135deg, var(--navy), var(--navy2)); color: #f3ead7; border-bottom: 2px solid var(--gold);
+           background: linear-gradient(135deg, var(--navy), var(--navy2)); color: var(--hdr-ink); border-bottom: 2px solid var(--gold);
            position: relative; overflow: hidden; }
     #bar::after { content: ''; position: absolute; top: 0; bottom: 0; width: 45%; left: -60%; pointer-events: none;
-                  background: linear-gradient(100deg, transparent, rgba(243,234,215,.16), transparent); animation: sheen 1.5s .35s ease-out both; }
+                  background: linear-gradient(100deg, transparent, rgba(255,255,255,.24), transparent); animation: sheen 1.5s .35s ease-out both; }
     @keyframes sheen { to { left: 120%; } }
-    #bar .mark { color: var(--gold); display: flex; }
+    #bar .mark { color: var(--hdr-ink); display: flex; }
     #bar .ttl { display: flex; flex-direction: column; flex: 1; min-width: 0; }
     #bar b { font-family: Georgia, "Times New Roman", serif; font-size: 16px; font-weight: 600; letter-spacing: .06em; }
     #flowlbl { font-size: 11px; opacity: .72; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    button.x { background: transparent; border: 0; color: #f3ead7; font-size: 20px; line-height: 1; cursor: pointer; opacity: .7; padding: 2px 6px; }
+    button.x { background: transparent; border: 0; color: var(--hdr-ink); font-size: 20px; line-height: 1; cursor: pointer; opacity: .7; padding: 2px 6px; }
     button.x:hover { opacity: 1; }
 
     #tabs { position: relative; display: flex; gap: 4px; padding: 0 12px; background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -165,7 +178,7 @@
     #outwrap { border-top: 1px solid var(--line); background: var(--surface); padding: 10px 12px 12px; max-height: 40%; display: flex; flex-direction: column; }
     #outhead { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
     #outtitle { flex: 1; font-family: Georgia, serif; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #out { margin: 0; flex: 1; overflow: auto; background: #0f141c; color: #d9d4c7; padding: 10px 12px; border-radius: 10px;
+    #out { margin: 0; flex: 1; overflow: auto; background: var(--code-bg); color: var(--code-ink); padding: 10px 12px; border-radius: 10px;
            border: 1px solid var(--line); font: 11px/1.55 "Cascadia Mono", Consolas, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
 
     button.b { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px; padding: 5px 11px;
@@ -177,7 +190,7 @@
 
     input, select { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 8px;
                     padding: 6px 9px; font-size: 12px; outline: none; transition: border-color .12s ease, box-shadow .12s ease; }
-    input:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(176,141,87,.18); }
+    input:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--ring); }
     input::placeholder { color: var(--muted); }
     .row { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
 
@@ -194,10 +207,11 @@
     .pill.COMPLETED, .pill.STARTED { background: rgba(21,128,61,.13); color: #15803d; }
     .pill.RETRY, .pill.ESCALATED { background: rgba(194,120,3,.14); color: #b45309; }
     .pill.PROCESSING, .pill.STARTING { background: rgba(37,99,235,.13); color: #2563eb; }
-    @media (prefers-color-scheme: dark) {
-      .pill.FAILED, .pill.ERROR { color: #f28b8b; } .pill.COMPLETED, .pill.STARTED { color: #6fd29a; }
-      .pill.RETRY, .pill.ESCALATED { color: #f0b865; } .pill.PROCESSING, .pill.STARTING { color: #8db4ff; }
-    }
+    :host([data-mode="dark"]) .pill.FAILED, :host([data-mode="dark"]) .pill.ERROR { color: #f28b8b; }
+    :host([data-mode="dark"]) .pill.COMPLETED, :host([data-mode="dark"]) .pill.STARTED { color: #6fd29a; }
+    :host([data-mode="dark"]) .pill.RETRY, :host([data-mode="dark"]) .pill.ESCALATED { color: #f0b865; }
+    :host([data-mode="dark"]) .pill.PROCESSING, :host([data-mode="dark"]) .pill.STARTING { color: #8db4ff; }
+    :host([data-mode="dark"]) .err { color: #f28b8b; background: rgba(242,139,139,.1); }
 
     .muted { color: var(--muted); }
     .card { border: 1px solid var(--line); border-radius: 12px; padding: 14px; margin: 14px 0; background: var(--surface); }
@@ -226,7 +240,7 @@
     .skel.w70 { width: 70%; } .skel.w50 { width: 50%; }
     @keyframes shimmer { from { background-position: 120% 0; } to { background-position: -120% 0; } }
     .bar { height: 3px; border-radius: 3px; background: var(--line); margin-top: 10px; overflow: hidden; }
-    .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), #ecd6a6); }
+    .bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold), var(--btn)); }
     .pill { animation: pillIn .4s cubic-bezier(.3,1.5,.5,1) both; }
     @keyframes pillIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 
@@ -243,7 +257,31 @@
       *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0s !important; animation-iteration-count: 1 !important;
                                transition-duration: .01ms !important; }
     }
-    .sub { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--gold); margin: 12px 0 6px; }
+    .sub { font-size: 10.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--accent-text); margin: 12px 0 6px; }
+
+    #tabs button { display: flex; align-items: center; gap: 6px; padding: 11px 12px; letter-spacing: .04em; }
+    #tabs button svg { width: 14px; height: 14px; flex: none; }
+    #panel, #tabs, #body, #outwrap, .card, table, th, td, #out { transition: background-color .35s ease, border-color .35s ease, color .35s ease; }
+    input, select { transition: background-color .35s ease, border-color .2s ease, color .35s ease, box-shadow .2s ease; }
+
+    .presets { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .preset { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 8px 8px 9px;
+              cursor: pointer; display: flex; flex-direction: column; gap: 7px; font-size: 11px; font-weight: 600; letter-spacing: .03em;
+              transition: transform .2s cubic-bezier(.2,.9,.3,1.3), border-color .2s, box-shadow .2s; }
+    .preset:hover { transform: translateY(-3px); border-color: var(--gold); }
+    .preset.on { border-color: var(--gold); box-shadow: 0 0 0 3px var(--ring); }
+    .sw { display: block; height: 44px; border-radius: 8px; background: var(--b); border: 1px solid rgba(128,128,128,.28); position: relative; overflow: hidden; }
+    .sw u { position: absolute; left: 0; right: 0; top: 0; height: 14px; background: linear-gradient(90deg, var(--h1), var(--h2)); }
+    .sw i { position: absolute; right: 7px; bottom: 6px; width: 14px; height: 14px; border-radius: 50%; background: var(--d); box-shadow: 0 1px 3px rgba(0,0,0,.3); }
+    .sw s { position: absolute; left: 8px; bottom: 9px; width: 24px; height: 4px; border-radius: 3px; background: rgba(128,128,128,.4); }
+    .chk { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 10px; cursor: pointer; line-height: 1.4; }
+    input[type=checkbox] { accent-color: var(--btn); width: 15px; height: 15px; margin: 0; cursor: pointer; flex: none; }
+    input[type=color] { padding: 2px; width: 44px; height: 32px; border-radius: 9px; cursor: pointer; }
+    #toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 24px); opacity: 0; pointer-events: none; z-index: 2147483001;
+             background: var(--surface); color: var(--ink); border: 1px solid var(--gold); border-radius: 999px; padding: 9px 18px; font-size: 12px; font-weight: 600;
+             box-shadow: var(--shadow); transition: opacity .35s ease, transform .45s cubic-bezier(.2,.9,.3,1.25); }
+    #toast.on { opacity: 1; transform: translate(-50%, 0); }
+    #mres { white-space: pre-wrap; margin: 8px 0 4px; font-size: 12px; }
   `;
 
   const host = document.createElement('div');
@@ -253,14 +291,16 @@
 
   root.innerHTML = `
     <style>${CSS}</style>
-    <div id="fab"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg><span>CPI GUIDER</span></div>
+    <div id="fab"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg><span>${APP_NAME.toUpperCase()}</span></div>
     <div id="layer"></div>
+    <div id="toast"></div>
     <div id="panel" hidden>
-      <div id="bar"><span class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></span><div class="ttl"><b>CPI Guider</b><span id="flowlbl"></span></div><button class="x" id="close">&times;</button></div>
+      <div id="bar"><span class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></span><div class="ttl"><b>${APP_NAME}</b><span id="flowlbl"></span></div><button class="x" id="close">&times;</button></div>
       <div id="tabs">
-        <button data-t="msg" class="on">Messages</button>
-        <button data-t="dep">Deployed</button>
-        <button data-t="tools">Tools</button>
+        <button data-t="msg" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Messages</button>
+        <button data-t="dep"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3zM12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>Deployed</button>
+        <button data-t="tools"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4 2.6-2.6z"/></svg>Tools</button>
+        <button data-t="theme"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="15" cy="7.5" r="1"/></svg>Theme</button>
         <i id="ind"></i>
       </div>
       <div id="body">
@@ -312,6 +352,24 @@
             </div>
           </div>
         </section>
+        <section id="t-theme" hidden>
+          <div class="sub" style="margin-top:0">Theme</div>
+          <div class="presets" id="presets"></div>
+          <div class="card">
+            <b>Your own colour</b>
+            <div class="row" style="margin-top:10px">
+              <input type="color" id="accent" value="#1f3a5f">
+              <input id="accenthex" size="9" maxlength="7" value="#1f3a5f" spellcheck="false">
+              <button class="b" id="themereset">Reset</button>
+            </div>
+            <label class="chk"><input type="checkbox" id="customdark"> Dark surfaces</label>
+            <div class="meta">Pick any colour. The header, buttons and accents are derived from it, and text colours adjust to stay readable.</div>
+          </div>
+          <div class="card">
+            <b>Behaviour</b>
+            <label class="chk"><input type="checkbox" id="automark" checked> Show the red/green overlay automatically when a flow or SAP's trace page is open</label>
+          </div>
+        </section>
       </div>
       <div id="outwrap" hidden>
         <div id="outhead"><span id="outtitle"></span>
@@ -332,6 +390,114 @@
     $('#outwrap').hidden = false;
   }
   const fail = (title, e) => showOut(title + ' - failed', String(e.message || e));
+
+  // ---------- Theme ----------
+  const LIGHT_SHADOW = '0 18px 50px rgba(20,33,58,.28), 0 2px 8px rgba(20,33,58,.12)';
+  const DARK_SHADOW = '0 18px 50px rgba(0,0,0,.55), 0 2px 8px rgba(0,0,0,.35)';
+  const lightV = (o) => Object.assign({ surface: '#ffffff', 'code-bg': '#0f141c', 'code-ink': '#d9d4c7', shadow: LIGHT_SHADOW }, o);
+  const PRESETS = {
+    light:  { label: 'Light',  mode: 'light', vars: lightV({ bg: '#fbfaf7', ink: '#1b2430', muted: '#6b7280', line: '#e7e3da', tint: '#f4f1ea', navy: '#14213a', navy2: '#1f3a5f', gold: '#b08d57', 'accent-text': '#8a6a35', btn: '#1f3a5f', 'btn-ink': '#ffffff', 'hdr-ink': '#f3ead7', ring: 'rgba(176,141,87,.25)' }) },
+    dark:   { label: 'Dark',   mode: 'dark',  vars: { bg: '#12171f', surface: '#1a212b', ink: '#ebe8e2', muted: '#98a1ae', line: '#2a3340', tint: '#202937', navy: '#0d1522', navy2: '#16233a', gold: '#d3b27a', 'accent-text': '#d3b27a', btn: '#d3b27a', 'btn-ink': '#12171f', 'hdr-ink': '#f3ead7', 'code-bg': '#0b0f15', 'code-ink': '#d9d4c7', ring: 'rgba(211,178,122,.28)', shadow: DARK_SHADOW } },
+    yellow: { label: 'Yellow', mode: 'light', vars: lightV({ bg: '#fffbea', surface: '#fffefa', ink: '#3a2e05', muted: '#7f6a28', line: '#f0e3a6', tint: '#fcf3c6', navy: '#e5a900', navy2: '#ffd23a', gold: '#e5a900', 'accent-text': '#8a6400', btn: '#f2b300', 'btn-ink': '#2a2000', 'hdr-ink': '#2d2300', ring: 'rgba(229,169,0,.3)', shadow: '0 18px 50px rgba(120,86,0,.28), 0 2px 8px rgba(120,86,0,.14)' }) },
+    ocean:  { label: 'Ocean',  mode: 'light', vars: lightV({ bg: '#f1f7fb', ink: '#0f2538', muted: '#55718a', line: '#d5e4ef', tint: '#e6f1f8', navy: '#0a3556', navy2: '#0f6aa3', gold: '#2db3e8', 'accent-text': '#0b6aa2', btn: '#0f6aa3', 'btn-ink': '#ffffff', 'hdr-ink': '#eaf6ff', ring: 'rgba(45,179,232,.28)' }) },
+    forest: { label: 'Forest', mode: 'light', vars: lightV({ bg: '#f2f8f4', ink: '#13271b', muted: '#587264', line: '#d5e6db', tint: '#e7f2eb', navy: '#0d3a25', navy2: '#1f7a4c', gold: '#5fbf86', 'accent-text': '#1a6b42', btn: '#1f7a4c', 'btn-ink': '#ffffff', 'hdr-ink': '#e9f8ef', ring: 'rgba(95,191,134,.28)' }) },
+    rose:   { label: 'Rose',   mode: 'light', vars: lightV({ bg: '#fcf4f7', ink: '#2b1420', muted: '#7b5767', line: '#efd9e1', tint: '#f8e8ee', navy: '#55102d', navy2: '#a3204f', gold: '#ef86a6', 'accent-text': '#9b1c49', btn: '#a3204f', 'btn-ink': '#ffffff', 'hdr-ink': '#ffeef4', ring: 'rgba(239,134,166,.28)' }) }
+  };
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const hex2rgb = h => { h = String(h).replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  function rgb2hsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, l = (mx + mn) / 2;
+    let h = 0, sat = 0;
+    if (d) {
+      sat = l > .5 ? d / (2 - mx - mn) : d / (mx + mn);
+      h = mx === r ? (g - b) / d + (g < b ? 6 : 0) : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+      h *= 60;
+    }
+    return [h, sat * 100, l * 100];
+  }
+  function hsl2hex(h, sat, l) {
+    sat /= 100; l /= 100;
+    const k = n => (n + h / 30) % 12, a = sat * Math.min(l, 1 - l);
+    const f = n => l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1));
+    return '#' + [f(0), f(8), f(4)].map(x => Math.round(x * 255).toString(16).padStart(2, '0')).join('');
+  }
+  const lum = ([r, g, b]) => { const f = v => { v /= 255; return v <= .03928 ? v / 12.92 : Math.pow((v + .055) / 1.055, 2.4); }; return .2126 * f(r) + .7152 * f(g) + .0722 * f(b); };
+  const contrastOf = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + .05) / (Math.min(x, y) + .05); };
+  // whichever of white / black reads better on this colour (worst case is about 4.6:1)
+  const inkFor = rgb => contrastOf(rgb, [255, 255, 255]) >= contrastOf(rgb, [0, 0, 0]) ? '#ffffff' : '#000000';
+
+  function deriveTheme(accent, dark) {
+    const [h, s0, l] = rgb2hsl(...hex2rgb(accent));
+    const sat = clamp(s0, 18, 95);
+    const head1 = hsl2hex(h, sat, clamp(l - 12, 6, 90));
+    const btn = dark ? hsl2hex(h, sat, clamp(l, 58, 74)) : accent;
+    const gold = dark ? hsl2hex(h, sat, clamp(l + 8, 60, 78)) : hsl2hex(h, sat, clamp(l + 14, 40, 62));
+    const accentText = dark ? hsl2hex(h, sat, clamp(l + 10, 62, 78)) : hsl2hex(h, clamp(sat, 30, 90), clamp(l - 8, 22, 38));
+    const [gr, gg, gb] = hex2rgb(gold);
+    const surf = dark
+      ? { bg: hsl2hex(h, clamp(sat * .5, 10, 30), 9), surface: hsl2hex(h, clamp(sat * .45, 9, 26), 13), ink: hsl2hex(h, 12, 92), muted: hsl2hex(h, 8, 64), line: hsl2hex(h, 16, 22), tint: hsl2hex(h, clamp(sat * .4, 9, 24), 17) }
+      : { bg: hsl2hex(h, clamp(sat * .6, 14, 45), 97), surface: '#ffffff', ink: hsl2hex(h, 30, 12), muted: hsl2hex(h, 10, 40), line: hsl2hex(h, clamp(sat * .5, 14, 35), 88), tint: hsl2hex(h, clamp(sat * .6, 14, 45), 94) };
+    return {
+      mode: dark ? 'dark' : 'light',
+      vars: Object.assign(surf, {
+        navy: head1, navy2: accent, gold, 'accent-text': accentText, btn, 'btn-ink': inkFor(hex2rgb(btn)), 'hdr-ink': inkFor(hex2rgb(accent)),
+        'code-bg': hsl2hex(h, 25, dark ? 6 : 9), 'code-ink': '#e3e0d8', ring: `rgba(${gr},${gg},${gb},.28)`, shadow: dark ? DARK_SHADOW : LIGHT_SHADOW
+      })
+    };
+  }
+
+  const sysDark = window.matchMedia('(prefers-color-scheme: dark)');
+  function resolveTheme(c) {
+    if (c.preset === 'custom') return deriveTheme(c.accent, c.customDark);
+    if (c.preset === 'auto') return PRESETS[sysDark.matches ? 'dark' : 'light'];
+    return PRESETS[c.preset] || PRESETS.light;
+  }
+  function applyTheme() {
+    const t = resolveTheme(cfg);
+    for (const [k, v] of Object.entries(t.vars)) host.style.setProperty('--' + k, v);
+    host.dataset.mode = t.mode;
+    host.dataset.theme = cfg.preset;
+  }
+  const saveCfg = () => store.set('cfg', cfg);
+
+  const PRESET_ORDER = ['auto', 'light', 'dark', 'yellow', 'ocean', 'forest', 'rose', 'custom'];
+  function swatch(k) {
+    let b, h1, h2, d;
+    if (k === 'auto') {
+      const L = PRESETS.light.vars, D = PRESETS.dark.vars;
+      b = `linear-gradient(90deg, ${L.bg} 50%, ${D.bg} 50%)`; h1 = L.navy; h2 = D.navy2; d = D.btn;
+    } else {
+      const t = k === 'custom' ? deriveTheme(cfg.accent, cfg.customDark) : PRESETS[k];
+      b = t.vars.bg; h1 = t.vars.navy; h2 = t.vars.navy2; d = t.vars.btn;
+    }
+    return `<span class="sw" style="--b:${b};--h1:${h1};--h2:${h2};--d:${d}"><u></u><s></s><i></i></span>`;
+  }
+  function renderPresets() {
+    $('#presets').innerHTML = PRESET_ORDER.map(k =>
+      `<button class="preset${cfg.preset === k ? ' on' : ''}" data-p="${k}">${swatch(k)}<span>${k === 'auto' ? 'Auto' : k === 'custom' ? 'Custom' : PRESETS[k].label}</span></button>`).join('');
+    $$('#presets .preset').forEach(b => b.onclick = () => { cfg.preset = b.dataset.p; applyTheme(); saveCfg(); renderPresets(); });
+    $('#accent').value = cfg.accent; $('#accenthex').value = cfg.accent;
+    $('#customdark').checked = !!cfg.customDark; $('#automark').checked = !!cfg.autoMark;
+  }
+  function setAccent(hex) {
+    cfg.accent = hex.toLowerCase(); cfg.preset = 'custom';
+    applyTheme(); saveCfg(); renderPresets();
+  }
+  $('#accent').oninput = e => setAccent(e.target.value);
+  $('#accenthex').oninput = e => { const v = e.target.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) setAccent(v.startsWith('#') ? v : '#' + v); };
+  $('#customdark').onchange = e => { cfg.customDark = e.target.checked; cfg.preset = 'custom'; applyTheme(); saveCfg(); renderPresets(); };
+  $('#automark').onchange = e => { cfg.autoMark = e.target.checked; saveCfg(); };
+  $('#themereset').onclick = () => { Object.assign(cfg, DEFAULT_CFG); applyTheme(); saveCfg(); renderPresets(); };
+  sysDark.addEventListener('change', () => { if (cfg.preset === 'auto') applyTheme(); });
+  applyTheme(); renderPresets();
+
+  let toastTimer = null;
+  function toast(text) {
+    const t = $('#toast');
+    t.textContent = text; t.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 4200);
+  }
 
   // ---------- panel behaviour ----------
   function refreshFlow() {
@@ -373,7 +539,7 @@
   $$('#tabs button').forEach(b => b.onclick = () => {
     $$('#tabs button').forEach(x => x.classList.toggle('on', x === b));
     moveInd(b);
-    ['msg', 'dep', 'tools'].forEach(t => { $('#t-' + t).hidden = (t !== b.dataset.t); });
+    ['msg', 'dep', 'tools', 'theme'].forEach(t => { $('#t-' + t).hidden = (t !== b.dataset.t); });
   });
   let lastUrl = location.href;
   setInterval(() => {
@@ -381,6 +547,7 @@
       lastUrl = location.href; refreshFlow();
       if (marksFlow && currentFlowId() !== marksFlow) clearMarks();
     }
+    maybeAutoMark();
   }, 1000);
 
   document.addEventListener('dblclick', e => {
@@ -402,27 +569,39 @@
 
   async function setLogLevel(flow, level) {
     const prefixes = opsPrefix ? [opsPrefix] : ['/itspaces/Operations', '/Operations'];
-    let lastErr;
+    const body = JSON.stringify({ artifactSymbolicName: flow, mplLogLevel: level, nodeType: 'IFLMAP', runtimeLocationId: 'cloudintegration' });
+    // The server answers 406/415 when it dislikes a header, so walk through the plausible variants.
+    const combos = [
+      { ct: 'application/json', accept: '*/*' },
+      { ct: 'application/json', accept: 'application/json, text/plain, */*' },
+      { ct: 'application/json', accept: 'application/xml' },
+      { ct: 'application/json;charset=UTF-8', accept: 'text/plain' }
+    ];
+    const tried = [];
     for (const p of prefixes) {
       const url = location.origin + p + '/' + LOGCMD;
-      try {
-        let tok = '';
+      let tok = '';
+      for (const src of [url, location.origin + '/']) {                      // CSRF token, best effort
         try {
-          const g = await fetch(url, { credentials: 'include', headers: { 'X-CSRF-Token': 'Fetch' } });
+          const g = await fetch(src, { credentials: 'include', headers: { 'X-CSRF-Token': 'Fetch' } });
           tok = g.headers.get('x-csrf-token') || '';
-        } catch (e) { /* token fetch is best effort */ }
-        const headers = { 'Content-Type': 'application/json', Accept: 'application/json' };
-        if (tok && tok.toLowerCase() !== 'required') headers['X-CSRF-Token'] = tok;
-        const r = await fetch(url, {
-          method: 'POST', credentials: 'include', headers,
-          body: JSON.stringify({ artifactSymbolicName: flow, mplLogLevel: level, nodeType: 'IFLMAP', runtimeLocationId: 'cloudintegration' })
-        });
-        const t = await r.text();
-        if (r.ok && !/^\s*</.test(t)) { opsPrefix = p; return t; }   // HTML 200 = login page, not success
-        lastErr = new Error(p + ' -> ' + r.status + ' ' + r.statusText + '\n' + t.slice(0, 400));
-      } catch (e) { lastErr = e; }
+          if (tok && tok.toLowerCase() !== 'required') break;
+        } catch (e) { /* try next source */ }
+      }
+      for (const c of combos) {
+        try {
+          const headers = { 'Content-Type': c.ct, Accept: c.accept };
+          if (tok && tok.toLowerCase() !== 'required') headers['X-CSRF-Token'] = tok;
+          const r = await fetch(url, { method: 'POST', credentials: 'include', headers, body });
+          const t = await r.text();
+          const type = r.headers.get('content-type') || '';
+          if (r.ok && !/text\/html/i.test(type)) { opsPrefix = p; return t; }   // an HTML 200 is a login page, not success
+          tried.push(p + '  [Accept: ' + c.accept + ']  ->  ' + r.status + ' ' + r.statusText + '  ' + t.slice(0, 120).replace(/\s+/g, ' '));
+          if (r.status !== 406 && r.status !== 415) break;                      // other errors will not change with other headers
+        } catch (e) { tried.push(p + '  ->  ' + e.message); break; }
+      }
     }
-    throw lastErr;
+    throw new Error(tried.join('\n') || 'No response from the server.');
   }
 
   $('#lvlbtn').onclick = async () => {
@@ -510,14 +689,29 @@
     }
   }
 
-  async function markSteps(guid, msgFlow) {
-    const box = $('#dres');
-    box.innerHTML = SKEL;
+  // step data for one message, fetched once and shared by the step list and the overlay
+  const stepCache = new Map();
+  function runSteps(guid) {
+    if (!stepCache.has(guid)) {
+      stepCache.set(guid, (async () => {
+        const runs = await api(`/MessageProcessingLogs('${q(guid)}')/Runs?$format=json`);
+        const out = [];
+        for (const run of runs) out.push({ run, steps: await getSteps(run.Id) });
+        return out;
+      })().catch(e => { stepCache.delete(guid); throw e; }));
+    }
+    return stepCache.get(guid);
+  }
+
+  let marksGuid = '';
+  async function markSteps(guid, msgFlow, opts = {}) {
+    const out = $('#mres');
+    const say = t => { if (out) { out.textContent = t; out.className = marks.length ? 'muted' : ''; } };
+    if (out && !opts.auto) out.innerHTML = SKEL;
     try {
-      const runs = await api(`/MessageProcessingLogs('${q(guid)}')/Runs?$format=json`);
       const byId = new Map();
-      for (const run of runs) {
-        for (const st of await getSteps(run.Id)) {
+      for (const { run, steps } of await runSteps(guid)) {
+        for (const st of steps) {
           const id = st.ModelStepId || st.StepId;
           if (!id) continue;
           const c = colorOf(st.Status);
@@ -528,7 +722,7 @@
         }
       }
       clearMarks();
-      marksFlow = currentFlowId();
+      marksFlow = currentFlowId(); marksGuid = guid;
       const idx = shapeIndex(), missing = [];
       for (const m of byId.values()) {
         m.el = findShape(m.id, idx);
@@ -548,13 +742,57 @@
       }
       positionMarks();
       markTimer = setInterval(positionMarks, 250);
-      const cur = currentFlowId();
-      let t = 'Marked ' + marks.length + ' of ' + byId.size + ' steps on the canvas.';
-      if (cur && msgFlow && cur !== msgFlow) t += '\nNote: this message is from "' + msgFlow + '" but the page shows "' + cur + '".';
-      if (missing.length) t += '\nNot found on this page: ' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? ', ...' : '');
-      if (!marks.length) t += '\nOpen the iFlow in Design view first. If it is open, use Tools > "List canvas IDs" and send me the output.';
-      box.innerHTML = '<div class="' + (marks.length ? 'muted' : 'err') + '" style="white-space:pre-wrap;margin-top:8px">' + esc(t) + '</div>';
-    } catch (e) { box.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+      if (marks.length) {
+        pending = null; store.set('pending', null);
+        const bad = marks.filter(m => m.color === 'red').length;
+        let t = 'Overlay: ' + marks.length + ' of ' + byId.size + ' steps shown on the canvas' + (bad ? ' (' + bad + ' failed)' : '') + '.';
+        const cur = currentFlowId();
+        if (cur && msgFlow && cur !== msgFlow) t += '\nNote: this message is from "' + msgFlow + '" but the page shows "' + cur + '".';
+        if (missing.length) t += '\nNot on this canvas: ' + missing.slice(0, 8).join(', ') + (missing.length > 8 ? ', ...' : '');
+        say(t);
+        if (opts.auto) toast('Step overlay applied: ' + marks.length + ' steps' + (bad ? ', ' + bad + ' failed' : ''));
+      } else {
+        pending = { guid, flow: msgFlow || '', ts: Date.now() };
+        store.set('pending', pending);
+        const ids = [...idx.keys()];
+        const looksLikeCanvas = ids.some(k => /bpmn|activity|event|gateway|flow/i.test(k));
+        say(looksLikeCanvas
+          ? 'No step matched this diagram\'s shape IDs. The details are in the output pane below - send them to me and I will match your tenant.'
+          : 'No flow diagram on this page. Open "' + (msgFlow || 'the iFlow') + '" in Design view - the red/green overlay will appear automatically.');
+        if (looksLikeCanvas) {
+          showOut('Why nothing was marked',
+            'Step IDs from the trace:\n' + [...byId.keys()].join('\n') + '\n\nShape IDs on this page:\n' + ids.slice(0, 150).join('\n'), 'overlay-diagnostics.txt');
+        }
+      }
+    } catch (e) { if (out) out.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
+  }
+
+  // "Trace steps": the step list and the canvas overlay together
+  const traceSteps = (guid, flow) => Promise.all([loadSteps(guid), markSteps(guid, flow)]);
+
+  // overlay without clicking: on SAP's own trace page (message GUID in the URL) or when a pending flow's design page opens
+  function guidFromUrl() {
+    let u = location.href;
+    try { u = decodeURIComponent(u); } catch (e) { /* keep raw */ }
+    const m = /messageGuid["'\s:=]*([A-Za-z0-9_\-]{6,})/i.exec(u);
+    return m ? m[1] : '';
+  }
+  const autoTries = new Map();
+  let autoBusy = false;
+  async function maybeAutoMark() {
+    if (autoBusy || !cfg.autoMark) return;
+    const g = guidFromUrl();
+    const target = g ? { guid: g, flow: '' }
+      : (pending && currentFlowId() && currentFlowId() === pending.flow && Date.now() - pending.ts < 30 * 60e3) ? pending : null;
+    if (!target) return;
+    if (marks.length && marksGuid === target.guid) return;
+    if (shapeIndex().size < 3) return;                                   // diagram not drawn yet
+    const key = target.guid + '|' + location.pathname;
+    const n = (autoTries.get(key) || 0) + 1;
+    if (n > 6) return;
+    autoTries.set(key, n);
+    autoBusy = true;
+    try { await markSteps(target.guid, target.flow, { auto: true }); } finally { autoBusy = false; }
   }
 
   // ---------- Messages tab ----------
@@ -566,6 +804,7 @@
     if (status) f.push(`Status eq '${status}'`);
     $('#list').innerHTML = SKEL;
     $('#detail').innerHTML = '';
+    stepCache.clear();
     try {
       const rows = await api('/MessageProcessingLogs?$format=json&$top=50&$orderby=' +
         encodeURIComponent('LogStart desc') + '&$filter=' + encodeURIComponent(f.join(' and ')));
@@ -594,10 +833,10 @@
           <button class="b" id="d-att">Attachments</button>
           <button class="b" id="d-hdr">Custom headers</button>
           <button class="b p" id="d-trace">Trace steps</button>
-          <button class="b p" id="d-mark">Mark on canvas</button>
-          <button class="b" id="d-replay">Replay</button>
-          <button class="b" id="d-unmark">Clear marks</button>
+          <button class="b" id="d-replay">Replay overlay</button>
+          <button class="b" id="d-unmark">Clear overlay</button>
         </div>
+        <div id="mres" class="muted"></div>
         <div id="dres"></div></div>`;
       $('#d-copy').onclick = () => navigator.clipboard.writeText(guid);
       $('#d-err').onclick = async () => {
@@ -611,10 +850,9 @@
         } catch (e) { fail('Custom headers', e); }
       };
       $('#d-att').onclick = () => loadAttachments(guid);
-      $('#d-trace').onclick = () => loadSteps(guid);
-      $('#d-mark').onclick = () => markSteps(guid, m.IntegrationFlowName);
-      $('#d-replay').onclick = () => { if (marks.length) replayMarks(); else $('#dres').textContent = 'Nothing marked yet - click Mark on canvas first.'; };
-      $('#d-unmark').onclick = () => { clearMarks(); $('#dres').textContent = 'Marks cleared.'; };
+      $('#d-trace').onclick = () => traceSteps(guid, m.IntegrationFlowName);
+      $('#d-replay').onclick = () => { if (marks.length) replayMarks(); else $('#mres').textContent = 'Nothing on the canvas yet - click Trace steps first.'; };
+      $('#d-unmark').onclick = () => { clearMarks(); pending = null; store.set('pending', null); $('#mres').textContent = 'Overlay cleared.'; };
     } catch (e) { d.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   }
 
@@ -642,10 +880,8 @@
     const box = $('#dres');
     box.innerHTML = SKEL;
     try {
-      const runs = await api(`/MessageProcessingLogs('${q(guid)}')/Runs?$format=json`);
       let html = '';
-      for (const run of runs) {
-        const steps = await getSteps(run.Id);
+      for (const { run, steps } of await runSteps(guid)) {
         html += `<div class="sub">Run ${esc(run.Id)}</div><table><tr><th>#</th><th>Step</th><th>Status</th><th></th></tr>` +
           steps.map(s => `<tr><td>${esc(s.ChildCount)}</td><td>${esc(s.StepId || s.ModelStepId)}</td>
             <td>${pill(s.Status)}</td>
