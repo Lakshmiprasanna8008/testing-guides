@@ -34,7 +34,7 @@
       try { localStorage.setItem('cpiGuider.' + k, JSON.stringify(v)); } catch (e) { /* ignore */ }
     }
   };
-  const DEFAULT_CFG = { preset: 'auto', accent: '#1f3a5f', customDark: false, autoMark: true };
+  const DEFAULT_CFG = { preset: 'auto', accent: '#1f3a5f', customDark: false, autoMark: true, stepByStep: true };
   const cfg = Object.assign({}, DEFAULT_CFG, (await store.get('cfg')) || {});
   let pending = (await store.get('pending')) || null;       // overlay waiting for the iFlow's design page
 
@@ -244,10 +244,12 @@
     .pill { animation: pillIn .4s cubic-bezier(.3,1.5,.5,1) both; }
     @keyframes pillIn { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
 
-    .mk-outline { animation: mk-in .55s cubic-bezier(.3,1.35,.55,1) both; animation-delay: var(--d, 0ms); }
-    .mk-outline.red { animation: mk-in .55s cubic-bezier(.3,1.35,.55,1) both, mk-pulse 1.9s ease-in-out infinite;
-                      animation-delay: var(--d, 0ms), calc(var(--d, 0ms) + .55s); }
-    .mk-badge { animation: mk-pop .6s cubic-bezier(.3,1.8,.5,1) both; animation-delay: calc(var(--d, 0ms) + 160ms); }
+    .mk-outline, .mk-badge { visibility: hidden; }
+    .mk-outline.on { visibility: visible; animation: mk-in .55s cubic-bezier(.3,1.35,.55,1) both; }
+    .mk-outline.on.cur:not(.red) { box-shadow: 0 0 0 3px rgba(255,255,255,.9), 0 0 24px 5px currentColor; }
+    .mk-outline.red.on { animation: mk-in .55s cubic-bezier(.3,1.35,.55,1) both, mk-pulse 1.9s ease-in-out infinite;
+                         animation-delay: 0s, .55s; }
+    .mk-badge.on { visibility: visible; animation: mk-pop .6s cubic-bezier(.3,1.8,.5,1) both; animation-delay: .12s; }
     @keyframes mk-in { from { opacity: 0; transform: scale(.8); } to { opacity: 1; transform: scale(1); } }
     @keyframes mk-pop { 0% { opacity: 0; transform: scale(0) rotate(-50deg); } 100% { opacity: 1; transform: scale(1) rotate(0); } }
     @keyframes mk-pulse { 0%, 100% { box-shadow: 0 0 0 2px rgba(255,255,255,.7), 0 0 8px currentColor; }
@@ -277,11 +279,33 @@
     .chk { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-top: 10px; cursor: pointer; line-height: 1.4; }
     input[type=checkbox] { accent-color: var(--btn); width: 15px; height: 15px; margin: 0; cursor: pointer; flex: none; }
     input[type=color] { padding: 2px; width: 44px; height: 32px; border-radius: 9px; cursor: pointer; }
-    #toast { position: fixed; left: 50%; bottom: 28px; transform: translate(-50%, 24px); opacity: 0; pointer-events: none; z-index: 2147483001;
+    #toast { position: fixed; left: 50%; bottom: 96px; transform: translate(-50%, 24px); opacity: 0; pointer-events: none; z-index: 2147483001;
              background: var(--surface); color: var(--ink); border: 1px solid var(--gold); border-radius: 999px; padding: 9px 18px; font-size: 12px; font-weight: 600;
              box-shadow: var(--shadow); transition: opacity .35s ease, transform .45s cubic-bezier(.2,.9,.3,1.25); }
     #toast.on { opacity: 1; transform: translate(-50%, 0); }
     #mres { white-space: pre-wrap; margin: 8px 0 4px; font-size: 12px; }
+
+    tr.click.sel td { background: var(--tint); }
+    tr.click.sel td:first-child { box-shadow: inset 3px 0 0 var(--gold); }
+    #player { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483001; display: flex; align-items: center; gap: 6px;
+              background: var(--surface); color: var(--ink); border: 1px solid var(--gold); border-radius: 999px; padding: 6px 8px 6px 10px;
+              box-shadow: var(--shadow); font-size: 12px; animation: slideUp .4s cubic-bezier(.2,.9,.3,1.15) both; }
+    #player button { border: 0; background: transparent; color: var(--ink); width: 28px; height: 28px; border-radius: 50%; cursor: pointer; display: grid; place-items: center;
+                     transition: background-color .15s, transform .15s cubic-bezier(.2,.9,.3,1.4); }
+    #player button:hover { background: var(--tint); transform: scale(1.1); }
+    #player button:active { transform: scale(.92); }
+    #player button svg { width: 15px; height: 15px; }
+    #player #pl-play { background: var(--btn); color: var(--btn-ink); }
+    #player #pl-play:hover { background: var(--btn); filter: brightness(1.12); }
+    #player .pl-info { display: flex; flex-direction: column; min-width: 150px; max-width: 220px; padding: 0 6px; }
+    #player .pl-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+    #pl-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #pl-name[data-c="red"] { color: #dc2626; } #pl-name[data-c="green"] { color: #16a34a; } #pl-name[data-c="amber"] { color: #d97706; }
+    :host([data-mode="dark"]) #pl-name[data-c="red"] { color: #f28b8b; } :host([data-mode="dark"]) #pl-name[data-c="green"] { color: #6fd29a; }
+    #pl-count { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 11px; }
+    .pl-bar { height: 3px; border-radius: 3px; background: var(--line); margin-top: 4px; overflow: hidden; }
+    .pl-bar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #16a34a, var(--gold)); transition: width .3s cubic-bezier(.3,.9,.3,1); }
+    #player select { padding: 3px 4px; font-size: 11px; border-radius: 8px; }
   `;
 
   const host = document.createElement('div');
@@ -294,6 +318,14 @@
     <div id="fab"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg><span>${APP_NAME.toUpperCase()}</span></div>
     <div id="layer"></div>
     <div id="toast"></div>
+    <div id="player" hidden>
+      <button id="pl-restart" title="Back to start"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 5h2.5v14H6zM20 5v14L9.5 12z"/></svg></button>
+      <button id="pl-play" title="Play / pause"></button>
+      <button id="pl-next" title="Next step"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M15.5 5H18v14h-2.5zM4 5l10.5 7L4 19z"/></svg></button>
+      <div class="pl-info"><div class="pl-top"><b id="pl-name">Ready</b><span id="pl-count">0 / 0</span></div><div class="pl-bar"><i id="pl-prog"></i></div></div>
+      <select id="pl-speed" title="Speed"><option value="2">0.5x</option><option value="1" selected>1x</option><option value="0.5">2x</option></select>
+      <button id="pl-close" title="Clear overlay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    </div>
     <div id="panel" hidden>
       <div id="bar"><span class="mark"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor" stroke="none"/></svg></span><div class="ttl"><b>${APP_NAME}</b><span id="flowlbl"></span></div><button class="x" id="close">&times;</button></div>
       <div id="tabs">
@@ -313,6 +345,7 @@
             </div>
             <div class="meta" id="lvlmsg">Trace records payloads for about 10 minutes, then resets. Apply it, run your flow, then search below.</div>
             <div class="bar"><i id="lvlbar"></i></div>
+            <label class="chk"><input type="checkbox" id="keeptrace"> Keep trace on until I switch it off (re-applied every 8 minutes)</label>
           </div>
           <div class="row">
             <input id="flow" placeholder="iFlow ID" size="24">
@@ -368,6 +401,7 @@
           <div class="card">
             <b>Behaviour</b>
             <label class="chk"><input type="checkbox" id="automark" checked> Show the red/green overlay automatically when a flow or SAP's trace page is open</label>
+            <label class="chk"><input type="checkbox" id="stepbystep" checked> Play the overlay step by step (otherwise show everything at once)</label>
           </div>
         </section>
       </div>
@@ -478,7 +512,7 @@
       `<button class="preset${cfg.preset === k ? ' on' : ''}" data-p="${k}">${swatch(k)}<span>${k === 'auto' ? 'Auto' : k === 'custom' ? 'Custom' : PRESETS[k].label}</span></button>`).join('');
     $$('#presets .preset').forEach(b => b.onclick = () => { cfg.preset = b.dataset.p; applyTheme(); saveCfg(); renderPresets(); });
     $('#accent').value = cfg.accent; $('#accenthex').value = cfg.accent;
-    $('#customdark').checked = !!cfg.customDark; $('#automark').checked = !!cfg.autoMark;
+    $('#customdark').checked = !!cfg.customDark; $('#automark').checked = !!cfg.autoMark; $('#stepbystep').checked = !!cfg.stepByStep;
   }
   function setAccent(hex) {
     cfg.accent = hex.toLowerCase(); cfg.preset = 'custom';
@@ -488,6 +522,7 @@
   $('#accenthex').oninput = e => { const v = e.target.value.trim(); if (/^#?[0-9a-f]{6}$/i.test(v)) setAccent(v.startsWith('#') ? v : '#' + v); };
   $('#customdark').onchange = e => { cfg.customDark = e.target.checked; cfg.preset = 'custom'; applyTheme(); saveCfg(); renderPresets(); };
   $('#automark').onchange = e => { cfg.autoMark = e.target.checked; saveCfg(); };
+  $('#stepbystep').onchange = e => { cfg.stepByStep = e.target.checked; saveCfg(); };
   $('#themereset').onclick = () => { Object.assign(cfg, DEFAULT_CFG); applyTheme(); saveCfg(); renderPresets(); };
   sysDark.addEventListener('change', () => { if (cfg.preset === 'auto') applyTheme(); });
   applyTheme(); renderPresets();
@@ -517,6 +552,13 @@
     p.hidden = false;
     refreshFlow();
     moveInd();
+    autoLoadMessages();
+  }
+  let autoListed = '';
+  function autoLoadMessages() {                             // on a flow's page, list its recent messages straight away
+    const f = currentFlowId();
+    if (!f || autoListed === f) return;
+    autoListed = f; $('#flow').value = f; $('#search').click();
   }
   function closePanel() {
     const p = $('#panel');
@@ -554,7 +596,7 @@
     if (!marks.length || e.composedPath().includes(host)) return;       // ignore our own panel
     let hit = null, best = Infinity;
     for (const m of marks) {
-      if (!m.el || !m.el.isConnected) continue;
+      if (!m.el || !m.el.isConnected || !m.outline.classList.contains('on')) continue;
       const r = m.el.getBoundingClientRect();
       if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom && r.width * r.height < best) {
         hit = m; best = r.width * r.height;                              // smallest shape under the cursor wins
@@ -604,28 +646,43 @@
     throw new Error(tried.join('\n') || 'No response from the server.');
   }
 
+  let keepTimer = null, traceFlow = '';
+  const keepMs = () => Number(host.dataset.keepMs) || 8 * 60e3;       // SAP resets Trace after ~10 minutes
+  function startTraceCountdown(flow) {
+    clearInterval(countdown);
+    const bar = $('#lvlbar'), msg = $('#lvlmsg');
+    bar.style.transition = 'none'; bar.style.width = '100%'; void bar.offsetWidth;
+    bar.style.transition = 'width 600s linear'; bar.style.width = '0%';
+    let left = 600;
+    const tick = () => {
+      if (left <= 0) { clearInterval(countdown); msg.textContent = 'Trace for ' + flow + ' has expired and reset.'; return; }
+      msg.textContent = 'TRACE active for ' + flow + ' - expires in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') +
+        ($('#keeptrace').checked ? ' (will be renewed).' : '. Run the flow now, then pick the new message.');
+      left--;
+    };
+    tick(); countdown = setInterval(tick, 1000);
+  }
+  function scheduleKeep() {
+    clearTimeout(keepTimer);
+    if (!$('#keeptrace').checked || !traceFlow) return;
+    keepTimer = setTimeout(async () => {
+      if (!$('#keeptrace').checked) return;
+      try { await setLogLevel(traceFlow, 'TRACE'); startTraceCountdown(traceFlow); scheduleKeep(); }
+      catch (e) { $('#lvlmsg').textContent = 'Could not renew trace: ' + String(e.message).split('\n')[0]; }
+    }, keepMs());
+  }
+  $('#keeptrace').onchange = () => { if ($('#keeptrace').checked) scheduleKeep(); else clearTimeout(keepTimer); };
+
   $('#lvlbtn').onclick = async () => {
     const flow = $('#flow').value.trim(), level = $('#lvl').value, msg = $('#lvlmsg');
-    clearInterval(countdown);
+    clearInterval(countdown); clearTimeout(keepTimer);
     const bar = $('#lvlbar'); bar.style.transition = 'none'; bar.style.width = '0%';
     if (!flow) { msg.textContent = 'Enter the iFlow ID above first.'; return; }
     msg.textContent = 'Applying ' + level + '...';
     try {
       await setLogLevel(flow, level);
-      if (level === 'TRACE') {
-        bar.style.width = '100%'; void bar.offsetWidth;
-        bar.style.transition = 'width 600s linear'; bar.style.width = '0%';
-        let left = 600;
-        const tick = () => {
-          if (left <= 0) { clearInterval(countdown); msg.textContent = 'Trace for ' + flow + ' has expired and reset.'; return; }
-          msg.textContent = 'TRACE active for ' + flow + ' - expires in ' + Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0') +
-            '. Run the flow now, then search.';
-          left--;
-        };
-        tick(); countdown = setInterval(tick, 1000);
-      } else {
-        msg.textContent = 'Log level set to ' + level + ' for ' + flow + '.';
-      }
+      if (level === 'TRACE') { traceFlow = flow; startTraceCountdown(flow); scheduleKeep(); }
+      else { traceFlow = ''; msg.textContent = 'Log level set to ' + level + ' for ' + flow + '.'; }
     } catch (e) {
       msg.textContent = 'Could not change the log level (details below).';
       fail('Set log level', e);
@@ -657,23 +714,84 @@
 
   function shapeIndex() {
     const m = new Map();
-    document.querySelectorAll('svg [id]').forEach(e => m.set(e.id, e));
+    document.querySelectorAll('svg [id], [id^="BPMN"]').forEach(e => m.set(e.id, e));
     return m;
+  }
+  const canvasReady = () => !!document.querySelector('[id^="BPMNShape_"], [id^="BPMNEdge_"], [data-element-id]') || document.querySelectorAll('svg [id]').length >= 3;
+  function attrSamples() {
+    const out = [];
+    for (const el of document.querySelectorAll('svg *')) {
+      for (const a of el.attributes) {
+        if (/^data-/.test(a.name) && /[A-Za-z]+_[A-Za-z0-9]+/.test(a.value)) out.push(el.tagName.toLowerCase() + '[' + a.name + '=' + a.value + ']');
+      }
+      if (out.length >= 80) break;
+    }
+    return out;
   }
   function findShape(id, idx) {
     for (const k of ['BPMNShape_' + id, 'BPMNEdge_' + id, id]) if (idx.has(k)) return idx.get(k);
     for (const [k, e] of idx) if (k.endsWith('_' + id) || k.endsWith('-' + id)) return e;
+    const v = String(id).replace(/"/g, '\\"');
+    for (const a of ['data-element-id', 'data-id', 'data-bpmn-id', 'data-bpmn-element', 'data-step-id', 'bpmnElement']) {
+      const el = document.querySelector('[' + a + '="' + v + '"]');
+      if (el) return el;
+    }
     return null;
   }
 
-  function replayMarks() {
-    for (const m of marks) for (const n of [m.outline, m.badge]) { n.style.animation = 'none'; void n.offsetWidth; n.style.animation = ''; }
+  // ---------- Trace player: the overlay plays step by step in execution order ----------
+  const play = { pos: 0, timer: null, playing: false, speed: 1 };
+  const stepDelay = () => clamp(2400 / Math.max(marks.length, 1), 160, 600) * play.speed;
+  const ICON_PLAY = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
+  function renderPlayer() {
+    $('#player').hidden = !marks.length;
+    const cur = marks[play.pos - 1];
+    $('#pl-count').textContent = play.pos + ' / ' + marks.length;
+    $('#pl-name').textContent = cur ? cur.id : 'Ready';
+    $('#pl-name').dataset.c = cur ? cur.color : '';
+    $('#pl-prog').style.width = (marks.length ? play.pos / marks.length * 100 : 0) + '%';
+    $('#pl-play').innerHTML = play.playing ? ICON_PAUSE : ICON_PLAY;
   }
+  function revealUpTo(n) {
+    marks.forEach((m, i) => {
+      const on = i < n;
+      m.outline.classList.toggle('on', on); m.badge.classList.toggle('on', on);
+      m.outline.classList.toggle('cur', on && i === n - 1);
+    });
+    play.pos = n; renderPlayer();
+  }
+  function stopPlay() { clearTimeout(play.timer); play.playing = false; renderPlayer(); }
+  function advance() {                                    // reveal one more step; false = playback should stop
+    if (play.pos >= marks.length) return false;
+    revealUpTo(play.pos + 1);
+    const m = marks[play.pos - 1];
+    if (m.color === 'red') { toast('Failed at step ' + m.id); return false; }
+    return play.pos < marks.length;
+  }
+  function startPlay() {
+    clearTimeout(play.timer);
+    if (play.pos >= marks.length) revealUpTo(0);
+    play.playing = true; renderPlayer();
+    const loop = () => {
+      if (!play.playing) return;
+      if (advance()) play.timer = setTimeout(loop, stepDelay()); else { play.playing = false; renderPlayer(); }
+    };
+    loop();                                               // first step right away
+  }
+  const replayMarks = () => { stopPlay(); revealUpTo(0); startPlay(); };
+  $('#pl-play').onclick = () => { if (play.playing) stopPlay(); else startPlay(); };
+  $('#pl-restart').onclick = () => { stopPlay(); revealUpTo(0); };
+  $('#pl-next').onclick = () => { stopPlay(); advance(); };
+  $('#pl-speed').onchange = e => { play.speed = parseFloat(e.target.value); };
+  $('#pl-close').onclick = () => { clearMarks(); pending = null; store.set('pending', null); };
 
   function clearMarks() {
+    clearTimeout(play.timer); play.playing = false; play.pos = 0;
     marks = []; marksFlow = '';
     layer.innerHTML = '';
     clearInterval(markTimer); markTimer = null;
+    $('#player').hidden = true;
   }
 
   function positionMarks() {
@@ -710,8 +828,10 @@
     if (out && !opts.auto) out.innerHTML = SKEL;
     try {
       const byId = new Map();
+      const when = st => { const m = /\/Date\((\d+)/.exec(st.StepStart || ''); return m ? +m[1] : null; };
       for (const { run, steps } of await runSteps(guid)) {
-        for (const st of steps) {
+        const ordered = steps.slice().sort((x, y) => (when(x) !== null && when(y) !== null && when(x) !== when(y)) ? when(x) - when(y) : Number(x.ChildCount) - Number(y.ChildCount));
+        for (const st of ordered) {
           const id = st.ModelStepId || st.StepId;
           if (!id) continue;
           const c = colorOf(st.Status);
@@ -722,18 +842,19 @@
         }
       }
       clearMarks();
+      if (!byId.size) {
+        say('No trace data for this message.\nSteps are only recorded when the iFlow ran with log level TRACE (a failed message keeps them only briefly, and traces expire after about an hour).\nSet TRACE above with "Apply to iFlow", run the flow again, then pick the new message.');
+        return;
+      }
       marksFlow = currentFlowId(); marksGuid = guid;
       const idx = shapeIndex(), missing = [];
       for (const m of byId.values()) {
         m.el = findShape(m.id, idx);
         if (!m.el) { missing.push(m.id); continue; }
         m.outline = document.createElement('div');
-        const delay = Math.min(marks.length * 120, 1800) + 'ms';   // marks reveal in execution order
         m.outline.className = 'mk-outline ' + m.color;
-        m.outline.style.setProperty('--d', delay);
         m.badge = document.createElement('div');
         m.badge.className = 'mk-badge ' + m.color;
-        m.badge.style.setProperty('--d', delay);
         m.badge.textContent = GLYPH[m.color] + (m.count > 1 ? ' \u00d7' + m.count : '');
         m.badge.title = m.id + ' - ' + m.status + (m.count > 1 ? ' (ran ' + m.count + ' times)' : '') + '\nClick, or double-click the step, for payload + properties';
         m.badge.onclick = () => { showPanel(); stepData(m.pick, 'both'); };
@@ -743,6 +864,7 @@
       positionMarks();
       markTimer = setInterval(positionMarks, 250);
       if (marks.length) {
+        if (cfg.stepByStep) { revealUpTo(0); startPlay(); } else revealUpTo(marks.length);
         pending = null; store.set('pending', null);
         const bad = marks.filter(m => m.color === 'red').length;
         let t = 'Overlay: ' + marks.length + ' of ' + byId.size + ' steps shown on the canvas' + (bad ? ' (' + bad + ' failed)' : '') + '.';
@@ -760,8 +882,10 @@
           ? 'No step matched this diagram\'s shape IDs. The details are in the output pane below - send them to me and I will match your tenant.'
           : 'No flow diagram on this page. Open "' + (msgFlow || 'the iFlow') + '" in Design view - the red/green overlay will appear automatically.');
         if (looksLikeCanvas) {
+          const attrs = attrSamples();
           showOut('Why nothing was marked',
-            'Step IDs from the trace:\n' + [...byId.keys()].join('\n') + '\n\nShape IDs on this page:\n' + ids.slice(0, 150).join('\n'), 'overlay-diagnostics.txt');
+            'Step IDs from the trace:\n' + [...byId.keys()].join('\n') + '\n\nShape IDs on this page:\n' + ids.slice(0, 150).join('\n') +
+            (attrs.length ? '\n\nData attributes that look like step IDs:\n' + attrs.join('\n') : ''), 'overlay-diagnostics.txt');
         }
       }
     } catch (e) { if (out) out.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
@@ -786,7 +910,7 @@
       : (pending && currentFlowId() && currentFlowId() === pending.flow && Date.now() - pending.ts < 30 * 60e3) ? pending : null;
     if (!target) return;
     if (marks.length && marksGuid === target.guid) return;
-    if (shapeIndex().size < 3) return;                                   // diagram not drawn yet
+    if (!canvasReady()) return;                                          // diagram not drawn yet
     const key = target.guid + '|' + location.pathname;
     const n = (autoTries.get(key) || 0) + 1;
     if (n > 6) return;
@@ -812,11 +936,14 @@
       $('#list').innerHTML = '<table><tr><th>Start</th><th>Status</th><th>iFlow</th></tr>' +
         rows.map(r => `<tr class="click" data-g="${esc(r.MessageGuid)}"><td>${esc(fmtDate(r.LogStart))}</td>
           <td>${pill(r.Status)}</td><td>${esc(r.IntegrationFlowName)}</td></tr>`).join('') + '</table>';
-      $$('#list tr.click').forEach(tr => tr.onclick = () => loadDetail(tr.dataset.g));
+      $$('#list tr.click').forEach(tr => tr.onclick = () => {
+        $$('#list tr.click').forEach(x => x.classList.toggle('sel', x === tr));
+        loadDetail(tr.dataset.g, true);                      // clicking a message also draws its overlay
+      });
     } catch (e) { $('#list').innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   };
 
-  async function loadDetail(guid) {
+  async function loadDetail(guid, autoTrace) {
     const d = $('#detail');
     d.innerHTML = '<div class="card">' + SKEL + '</div>';
     try {
@@ -853,6 +980,7 @@
       $('#d-trace').onclick = () => traceSteps(guid, m.IntegrationFlowName);
       $('#d-replay').onclick = () => { if (marks.length) replayMarks(); else $('#mres').textContent = 'Nothing on the canvas yet - click Trace steps first.'; };
       $('#d-unmark').onclick = () => { clearMarks(); pending = null; store.set('pending', null); $('#mres').textContent = 'Overlay cleared.'; };
+      if (autoTrace) traceSteps(guid, m.IntegrationFlowName);
     } catch (e) { d.innerHTML = '<div class="err">' + esc(e.message) + '</div>'; }
   }
 
