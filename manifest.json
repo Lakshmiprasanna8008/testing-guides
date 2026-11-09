@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "CPI Guider",
+  "version": "1.0.0",
+  "description": "Helper panel for SAP Cloud Integration: recent messages, errors, attachments, trace payloads, deployed artifacts, iFlow download.",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://*.hana.ondemand.com/itspaces/*",
+        "https://*.cloud.sap/itspaces/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
