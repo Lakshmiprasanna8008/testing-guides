@@ -18,11 +18,14 @@ If your tenant has an unusual URL, open it and click the CPI Guider toolbar icon
 - Motion design: spring-eased panel open/close, sliding tab indicator, staggered table rows, shimmer loading skeletons,
   a 10-minute trace countdown bar, and canvas marks that reveal step by step in execution order (use Replay to rewatch).
   Respects the system "reduce motion" setting.
-- Red/green overlay: open a message and click **Trace steps**. The step list appears and every step the message passed through is
-  outlined on the diagram: green = ok, red = failed (with a count if it ran several times). Click a badge, or double-click the step,
-  to see its payload and exchange properties. If the page has no diagram (e.g. the monitor list), the overlay waits and appears by
-  itself when you open that iFlow in Design view. It also appears automatically on SAP's own trace page.
-  Payloads need the iFlow to have run with log level TRACE.
+- Step-by-step red/green overlay: on an iFlow's design page the panel lists its recent messages by itself. Click a message and its path
+  plays on the diagram in execution order - each completed step turns green, the step that failed turns red (with a run count if it ran
+  several times) and playback stops there. A player bar lets you pause, step forward one step at a time, restart and change the speed.
+  Click a badge, or double-click a step, to see its payload and exchange properties.
+  IMPORTANT: SAP only records step data for messages that ran with log level TRACE (failed messages keep it only briefly, and traces expire
+  after about an hour). Use "Apply to iFlow" with TRACE - tick "Keep trace on" so it is renewed every 8 minutes - run the flow, then pick the new message.
+  If the page has no diagram (e.g. the monitor list), the overlay waits and appears by itself when you open that iFlow in Design view.
+  It also appears automatically on SAP's own trace page. If the diagram's shape names are not recognised, the output pane lists both sides.
 - Log level: set TRACE/DEBUG/INFO for the iFlow from the panel (internal SAP command, trace resets after ~10 min).
 - Messages: filter by iFlow, status, time range; detail with GUID, correlation ID, error text,
   custom headers, attachments (view/save), trace steps with payload and exchange properties.
